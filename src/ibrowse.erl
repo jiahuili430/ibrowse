@@ -683,13 +683,7 @@ stream_next(Req_id) ->
         [] ->
             {error, unknown_req_id};
         [{_, Pid}] ->
-            try
-                Pid ! {stream_next, Req_id}
-            catch
-                throw:Term -> Term;
-                exit:Reason -> {'EXIT', Reason};
-                error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-            end,
+            Pid ! {stream_next, Req_id},
             ok
     end.
 
@@ -704,13 +698,7 @@ stream_close(Req_id) ->
         [] ->
             {error, unknown_req_id};
         [{_, Pid}] ->
-            try
-                Pid ! {stream_close, Req_id}
-            catch
-                throw:Term -> Term;
-                exit:Reason -> {'EXIT', Reason};
-                error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-            end,
+            Pid ! {stream_close, Req_id},
             ok
     end.
 
@@ -1052,13 +1040,7 @@ handle_info(all_trace_off, State) ->
                       false ->
                           ok;
                       true ->
-                          try
-                              Pid ! {trace, false}
-                          catch
-                              throw:Term -> Term;
-                              exit:Reason -> {'EXIT', Reason};
-                              error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-                          end
+                          Pid ! {trace, false}
                   end;
              (_, Acc) ->
                   Acc
@@ -1078,13 +1060,7 @@ handle_info({trace, Bool, Host, Port}, State) ->
                 H == Host,
                 P == Port
                 ->
-                try
-                    Pid ! {trace, Bool}
-                catch
-                    throw:Term -> Term;
-                    exit:Reason -> {'EXIT', Reason};
-                    error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-                end;
+                Pid ! {trace, Bool};
             (_, Acc) ->
                 Acc
         end,
