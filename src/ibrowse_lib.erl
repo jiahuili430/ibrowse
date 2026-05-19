@@ -30,7 +30,9 @@
          get_value/3,
          parse_url/1,
          printable_date/0,
-         printable_date/1
+         printable_date/1,
+         try_catch/2,
+         try_catch/3
         ]).
 
 get_trace_status(Host, Port) ->
@@ -424,8 +426,14 @@ log_msg(Fmt, Args) ->
     end.
 
 log_msg(M, F, Fmt, Args) ->
+    try_catch(M, F, [Fmt, Args]).
+
+try_catch(F, A) ->
+    try_catch(erlang, apply, [F, A]).
+
+try_catch(M, F, A) ->
     try
-        apply(M, F, [Fmt, Args])
+        apply(M, F, A)
     catch
         throw:Term -> Term;
         exit:Reason -> {'EXIT', Reason};
