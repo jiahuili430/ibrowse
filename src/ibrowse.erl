@@ -113,7 +113,8 @@
                       parse_url/1,
                       get_value/3,
                       do_trace/2,
-                      log_msg/2
+                      log_msg/2,
+                      try_catch/3
                      ]).
                       
 -record(state, {trace = false}).
@@ -960,47 +961,19 @@ handle_call({set_config_value, Key, Val}, _From, State) ->
     {reply, ok, State};
 
 handle_call(rescan_config, _From, State) ->
-    Ret =
-        try
-            import_config()
-        catch
-            throw:Term -> Term;
-            exit:Reason -> {'EXIT', Reason};
-            error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-        end,
+    Ret = try_catch(?MODULE, import_config, []),
     {reply, Ret, State};
 
 handle_call({rescan_config, File}, _From, State) ->
-    Ret =
-        try
-            import_config(File)
-        catch
-            throw:Term -> Term;
-            exit:Reason -> {'EXIT', Reason};
-            error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-        end,
+    Ret = try_catch(?MODULE, import_config, [File]),
     {reply, Ret, State};
 
 handle_call({rescan_config_terms, Terms}, _From, State) ->
-    Ret =
-        try
-            apply_config(Terms)
-        catch
-            throw:Term -> Term;
-            exit:Reason -> {'EXIT', Reason};
-            error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-        end,
+    Ret = try_catch(?MODULE, apply_config, [Terms]),
     {reply, Ret, State};
 
 handle_call({add_config_terms, Terms}, _From, State) ->
-    Ret =
-        try
-            insert_config(Terms)
-        catch
-            throw:Term -> Term;
-            exit:Reason -> {'EXIT', Reason};
-            error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-        end,
+    Ret = try_catch(?MODULE, insert_config, [Terms]),
     {reply, Ret, State};
 
 handle_call(Request, _From, State) ->
