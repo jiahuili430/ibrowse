@@ -355,7 +355,7 @@ unit_tests(Options, Test_list) ->
     Options_1 = Options ++ [{connect_timeout, 5000}],
     Test_timeout = proplists:get_value(test_timeout, Options, 60000),
     {Pid, Ref} = erlang:spawn_monitor(?MODULE, unit_tests_1, [self(), Options_1, Test_list]),
-    receive 
+    receive
 	{done, Pid} ->
 	    ok;
 	{'DOWN', Ref, _, _, Info} ->
@@ -375,14 +375,17 @@ unit_tests(Options, Test_list) ->
     ok.
 
 unit_tests_1(Parent, Options, Test_list) ->
-    lists:foreach(fun({local_test_fun, Fun_name, Args}) ->
+    L = lists:all(fun({local_test_fun, Fun_name, Args}) ->
                           execute_req(local_test_fun, Fun_name, Args);
                      ({Url, Method}) ->
 			  execute_req(Url, Method, Options);
 		     ({Url, Method, X_Opts}) ->
 			  execute_req(Url, Method, X_Opts ++ Options)
 		  end, Test_list),
-    Parent ! {done, self()}.
+    case L of
+        true -> Parent ! {done, self()};
+        false -> halt(1)
+    end.
 
 verify_chunked_streaming() ->
     verify_chunked_streaming([]).
@@ -543,7 +546,11 @@ execute_req(local_test_fun, Method, Args) ->
             error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
         end,
     io:format("     ~-54.54w: ", [Method]),
-    io:format("~p~n", [Result]);
+    io:format("~p~n", [Result]),
+    case Result of
+        success -> true;
+        _ -> false
+    end;
 execute_req(Url, Method, Options) ->
     io:format("~7.7w, ~50.50s: ", [Method, Url]),
     Result =
@@ -556,9 +563,11 @@ execute_req(Url, Method, Options) ->
         end,
     case Result of
 	{ok, SCode, _H, _B} ->
-	    io:format("Status code: ~p~n", [SCode]);
+	    io:format("Status code: ~p~n", [SCode]),
+        true;
 	Err ->
-	    io:format("~p~n", [Err])
+	    io:format("~p~n", [Err]),
+        false
     end.
 
 log_msg(Fmt, Args) ->
