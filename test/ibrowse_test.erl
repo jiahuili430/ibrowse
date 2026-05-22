@@ -355,12 +355,17 @@ unit_tests(Options, Test_list) ->
     Options_1 = Options ++ [{connect_timeout, 5000}],
     Test_timeout = proplists:get_value(test_timeout, Options, 60000),
     {Pid, Ref} = erlang:spawn_monitor(?MODULE, unit_tests_1, [self(), Options_1, Test_list]),
-    receive 
+    io:format("~n +++++++ Pid:~p <- ~p:~p@~B", [Pid, ?MODULE, ?FUNCTION_NAME, ?LINE]),
+    io:format("~n +++++++ Ref:~p <- ~p:~p@~B", [Ref, ?MODULE, ?FUNCTION_NAME, ?LINE]),
+    receive
 	{done, Pid} ->
+        io:format("~n +++++++ Pid:~p <- ~p:~p@~B", [Pid, ?MODULE, ?FUNCTION_NAME, ?LINE]),
 	    ok;
 	{'DOWN', Ref, _, _, Info} ->
+        io:format("~n +++++++ Info:~p <- ~p:~p@~B", [Info, ?MODULE, ?FUNCTION_NAME, ?LINE]),
 	    io:format("Test process crashed: ~p~n", [Info])
     after Test_timeout ->
+        io:format("~n +++++++ Test_timeout:~p <- ~p:~p@~B", [Test_timeout, ?MODULE, ?FUNCTION_NAME, ?LINE]),
 	    exit(Pid, kill),
 	    io:format("Timed out waiting for tests to complete~n", [])
     end,
@@ -375,14 +380,18 @@ unit_tests(Options, Test_list) ->
     ok.
 
 unit_tests_1(Parent, Options, Test_list) ->
-    lists:foreach(fun({local_test_fun, Fun_name, Args}) ->
+    L = lists:all(fun({local_test_fun, Fun_name, Args}) ->
                           execute_req(local_test_fun, Fun_name, Args);
                      ({Url, Method}) ->
 			  execute_req(Url, Method, Options);
 		     ({Url, Method, X_Opts}) ->
 			  execute_req(Url, Method, X_Opts ++ Options)
 		  end, Test_list),
-    Parent ! {done, self()}.
+    io:format("~n +++++++ L:~p <- ~p:~p@~B", [L, ?MODULE, ?FUNCTION_NAME, ?LINE]),
+    case L of
+        true -> Parent ! {done, self()};
+        false -> halt(1)
+    end.
 
 verify_chunked_streaming() ->
     verify_chunked_streaming([]).
@@ -542,8 +551,14 @@ execute_req(local_test_fun, Method, Args) ->
             exit:Reason -> {'EXIT', Reason};
             error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
         end,
+    io:format("~n +++++++ Method:~p <- ~p:~p@~B", [Method, ?MODULE, ?FUNCTION_NAME, ?LINE]),
+    io:format("~n +++++++ Result:~p <- ~p:~p@~B", [Result, ?MODULE, ?FUNCTION_NAME, ?LINE]),
     io:format("     ~-54.54w: ", [Method]),
-    io:format("~p~n", [Result]);
+    io:format("~p~n", [Result]),
+    case Result of
+        success -> true;
+        _ -> false
+    end;
 execute_req(Url, Method, Options) ->
     io:format("~7.7w, ~50.50s: ", [Method, Url]),
     Result =
