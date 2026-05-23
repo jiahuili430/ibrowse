@@ -2045,13 +2045,7 @@ do_reply(#state{prev_req_id = Prev_req_id} = State,
             Body_1 = format_response_data(Resp_format, Body),
             ?TRY_CATCH(fun erlang:send/2, [StreamTo, {ibrowse_async_response, ReqId, Body_1}])
     end,
-    try
-        StreamTo ! {ibrowse_async_response_end, ReqId}
-    catch
-        throw:_Term -> _Term;
-        exit:_Reason -> {'EXIT', _Reason};
-        error:_Reason:_Stacktrace -> {'EXIT', {_Reason, _Stacktrace}}
-    end,
+    ?TRY_CATCH(fun erlang:send/2, [StreamTo, {ibrowse_async_response_end, ReqId}]),
     %% We don't want to delete the Req-id to Pid mapping straight away
     %% as the client may send a stream_next message just while we are
     %% sending back this ibrowse_async_response_end message. If we
@@ -2182,17 +2176,11 @@ dec_pipeline_counter(#state{cur_pipeline_size = Pipe_sz,
                                                                           Proc_state /= ?dead_proc_walking ->
     Ts = os:timestamp(),
     ?TRY_CATCH(fun ets:insert/2, [Tid, {{Pipe_sz - 1, os:timestamp(), self()}, []}]),
-    try
-        ets:select_delete(Tid, [{{{'_', '$2', '$1'},'_'},
-                                 [{'==', '$1', {const,self()}},
-                                  {'<',  '$2', {const,Ts}}
-                                 ],
-                                 [true]}])
-    catch
-        throw:_Term -> _Term;
-        exit:_Reason -> {'EXIT', _Reason};
-        error:_Reason:_Stacktrace -> {'EXIT', {_Reason, _Stacktrace}}
-    end,
+    ?TRY_CATCH(fun ets:select_delete/2, [Tid, [{{{'_', '$2', '$1'},'_'},
+                                                [{'==', '$1', {const,self()}},
+                                                 {'<',  '$2', {const,Ts}}
+                                                ],
+                                                [true]}]]),
     State#state{cur_pipeline_size = Pipe_sz - 1};
 dec_pipeline_counter(State) ->
     State.

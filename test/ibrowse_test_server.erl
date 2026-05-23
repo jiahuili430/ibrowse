@@ -111,13 +111,7 @@ connection(Conn, Sock_type) ->
 	inet:setopts(Conn, [{packet, http}, {active, true}]),
         server_loop(Conn, Sock_type, #request{})
     after
-        try
-            ets:delete(?CONN_PIPELINE_DEPTH, self())
-        catch
-            throw:_Term -> _Term;
-            exit:_Reason -> {'EXIT', _Reason};
-            error:_Reason:_Stacktrace -> {'EXIT', {_Reason, _Stacktrace}}
-        end
+        ?TRY_CATCH(fun ets:delete/2, [?CONN_PIPELINE_DEPTH, self()])
     end.
 
 set_controlling_process(Sock, tcp, Pid) ->

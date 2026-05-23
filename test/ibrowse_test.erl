@@ -233,13 +233,7 @@ do_wait(Url) ->
     receive
 	{'EXIT', _, normal} ->
             ?TRY_CATCH(fun ibrowse:show_dest_status/1, [Url]),
-            try
-                ibrowse:show_dest_status()
-            catch
-                throw:_Term -> _Term;
-                exit:_Reason -> {'EXIT', _Reason};
-                error:_Reason:_Stacktrace -> {'EXIT', {_Reason, _Stacktrace}}
-            end,
+            ?TRY_CATCH(fun ibrowse:show_dest_status/0, []),
 	    do_wait(Url);
 	{'EXIT', Pid, Reason} ->
 	    ets:delete(pid_table, Pid),
@@ -255,13 +249,7 @@ do_wait(Url) ->
 		    done;
 		_ ->
                     ?TRY_CATCH(fun ibrowse:show_dest_status/1, [Url]),
-                    try
-                        ibrowse:show_dest_status()
-                    catch
-                        throw:_Term -> _Term;
-                        exit:_Reason -> {'EXIT', _Reason};
-                        error:_Reason:_Stacktrace -> {'EXIT', {_Reason, _Stacktrace}}
-                    end,
+                    ?TRY_CATCH(fun ibrowse:show_dest_status/0, []),
 		    do_wait(Url)
 	    end
     end.
@@ -346,13 +334,7 @@ unit_tests(Options, Test_list) ->
 	    exit(Pid, kill),
 	    io:format("Timed out waiting for tests to complete~n", [])
     end,
-    try
-        ibrowse_test_server:stop_server(8181)
-    catch
-        throw:_Term -> _Term;
-        exit:_Reason -> {'EXIT', _Reason};
-        error:_Reason:_Stacktrace -> {'EXIT', {_Reason, _Stacktrace}}
-    end,
+    ?TRY_CATCH(fun ibrowse_test_server:stop_server/1, [8181]),
     error_logger:tty(true),
     ok.
 
