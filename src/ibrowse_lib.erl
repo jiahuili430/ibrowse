@@ -424,13 +424,7 @@ log_msg(Fmt, Args) ->
     end.
 
 log_msg(M, F, Fmt, Args) ->
-    try
-        apply(M, F, [Fmt, Args])
-    catch
-        throw:Term -> Term;
-        exit:Reason -> {'EXIT', Reason};
-        error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-    end.
+    ?TRY_CATCH(M, F, [Fmt, Args]).
 
 -ifdef(EUNIT).
 

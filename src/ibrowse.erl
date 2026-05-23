@@ -102,7 +102,11 @@
          show_dest_status/1,
          show_dest_status/2,
          get_metrics/0,
-         get_metrics/2
+         get_metrics/2,
+         import_config/0,
+         import_config/1,
+         apply_config/1,
+         insert_config/1
         ]).
 
 -ifdef(debug).
@@ -564,9 +568,9 @@ do_send_req(Conn_Pid, Parsed_url, Headers, Method, Body, Options, Timeout) ->
             ),
             {error, req_timedout};
         exit:Reason ->
-            {'EXIT', Reason};
+            {error, {'EXIT', Reason}};
         error:Reason:Stacktrace ->
-            {'EXIT', {Reason, Stacktrace}}
+            {error, {'EXIT', {Reason, Stacktrace}}}
     end.
 
 ensure_bin(L) when is_list(L)                     -> list_to_binary(L);
@@ -664,13 +668,7 @@ stream_next(Req_id) ->
         [] ->
             {error, unknown_req_id};
         [{_, Pid}] ->
-            try
-                Pid ! {stream_next, Req_id}
-            catch
-                throw:Term -> Term;
-                exit:Reason -> {'EXIT', Reason};
-                error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-            end,
+            ?TRY_CATCH(fun erlang:send/2, [Pid, {stream_next, Req_id}]),
             ok
     end.
 
@@ -685,13 +683,7 @@ stream_close(Req_id) ->
         [] ->
             {error, unknown_req_id};
         [{_, Pid}] ->
-            try
-                Pid ! {stream_close, Req_id}
-            catch
-                throw:Term -> Term;
-                exit:Reason -> {'EXIT', Reason};
-                error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-            end,
+            ?TRY_CATCH(fun erlang:send/2, [Pid, {stream_close, Req_id}]),
             ok
     end.
 
@@ -960,47 +952,19 @@ handle_call({set_config_value, Key, Val}, _From, State) ->
     {reply, ok, State};
 
 handle_call(rescan_config, _From, State) ->
-    Ret =
-        try
-            import_config()
-        catch
-            throw:Term -> Term;
-            exit:Reason -> {'EXIT', Reason};
-            error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-        end,
+    Ret = ?TRY_CATCH(fun ?MODULE:import_config/0, []),
     {reply, Ret, State};
 
 handle_call({rescan_config, File}, _From, State) ->
-    Ret =
-        try
-            import_config(File)
-        catch
-            throw:Term -> Term;
-            exit:Reason -> {'EXIT', Reason};
-            error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-        end,
+    Ret = ?TRY_CATCH(fun ?MODULE:import_config/1, [File]),
     {reply, Ret, State};
 
 handle_call({rescan_config_terms, Terms}, _From, State) ->
-    Ret =
-        try
-            apply_config(Terms)
-        catch
-            throw:Term -> Term;
-            exit:Reason -> {'EXIT', Reason};
-            error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-        end,
+    Ret = ?TRY_CATCH(fun ?MODULE:apply_config/1, [Terms]),
     {reply, Ret, State};
 
 handle_call({add_config_terms, Terms}, _From, State) ->
-    Ret =
-        try
-            insert_config(Terms)
-        catch
-            throw:Term -> Term;
-            exit:Reason -> {'EXIT', Reason};
-            error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-        end,
+    Ret = ?TRY_CATCH(fun ?MODULE:insert_config/1, [Terms]),
     {reply, Ret, State};
 
 handle_call(Request, _From, State) ->
@@ -1033,17 +997,11 @@ handle_info(all_trace_off, State) ->
                       false ->
                           ok;
                       true ->
-                          try
-                              Pid ! {trace, false}
-                          catch
-                              throw:Term -> Term;
-                              exit:Reason -> {'EXIT', Reason};
-                              error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-                          end
+                          ?TRY_CATCH(fun erlang:send/2, [Pid, {trace, false}])
                   end;
              (_, Acc) ->
                   Acc
-          end,
+           end,
     ets:foldl(Fun, undefined, ibrowse_lb),
     ets:select_delete(ibrowse_conf, [{{ibrowse_conf,{trace,'$1','$2'},true},[],['true']}]),
     {noreply, State};
@@ -1056,16 +1014,10 @@ handle_info({trace, Bool, Host, Port}, State) ->
     Fun = fun(#lb_pid{host_port = {H, P}, pid = Pid}, _)
              when H == Host,
                   P == Port ->
-                  try
-                      Pid ! {trace, Bool}
-                  catch
-                      throw:Term -> Term;
-                      exit:Reason -> {'EXIT', Reason};
-                      error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-                  end;
-            (_, Acc) ->
-                Acc
-        end,
+                  ?TRY_CATCH(fun erlang:send/2, [Pid, {trace, Bool}]);
+             (_, Acc) ->
+                  Acc
+          end,
     ets:foldl(Fun, undefined, ibrowse_lb),
     ets:insert(ibrowse_conf, #ibrowse_conf{key = {trace, Host, Port},
                                            value = Bool}),

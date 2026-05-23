@@ -278,13 +278,7 @@ handle_info({req_timedout, From}, #state{reqs = Reqs} = State) ->
         false ->
             {noreply, State};
         #request{stream_to = StreamTo, req_id = ReqId} ->
-            try
-                StreamTo ! {ibrowse_async_response_timeout, ReqId}
-            catch
-                throw:Term -> Term;
-                exit:Reason -> {'EXIT', Reason};
-                error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-            end,
+            ?TRY_CATCH(fun erlang:send/2, [StreamTo, {ibrowse_async_response_timeout, ReqId}]),
             State_1 = State#state{proc_state = ?dead_proc_walking},
             shutting_down(State_1),
             Reqs_1 = lists:filter(fun(#request{from = X_from}) ->
@@ -325,13 +319,7 @@ handle_info(Info, State) ->
 terminate(_Reason, #state{lb_ets_tid = Tid} = State) ->
     do_close(State),
     shutting_down(State),
-    try
-        ets:select_delete(Tid, [{{{'_','_','$1'},'_'},[{'==','$1',{const,self()}}],[true]}])
-    catch
-        throw:Term -> Term;
-        exit:Reason -> {'EXIT', Reason};
-        error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-    end,
+    ?TRY_CATCH(fun ets:select_delete/2, [Tid, [{{{'_','_','$1'},'_'},[{'==','$1',{const,self()}}],[true]}]]),
     ok.
 
 %%--------------------------------------------------------------------
@@ -687,13 +675,7 @@ do_connect(Host, Port, Options, _State, Timeout) ->
         undefined ->
             gen_tcp:connect(Host1, Port, Sock_options, Timeout);
         _ ->
-            try
-                ibrowse_socks5:connect(Host1, Port, Options1, Sock_options, Timeout)
-            catch
-                throw:Term -> Term;
-                exit:Reason -> {'EXIT', Reason};
-                error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-            end
+            ?TRY_CATCH(fun ibrowse_socks5:connect/5, [Host1, Port, Options1, Sock_options, Timeout])
     end.
 
 get_sock_options(Host, Options, SSLOptions) ->
@@ -847,30 +829,9 @@ do_close(#state{socket = Sock,
                 is_ssl = true,
                 use_proxy = true,
                 proxy_tunnel_setup = Pts
-               }) when Pts /= done ->
-    try
-        gen_tcp:close(Sock)
-    catch
-        throw:Term -> Term;
-        exit:Reason -> {'EXIT', Reason};
-        error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-    end;
-do_close(#state{socket = Sock, is_ssl = true})  ->
-    try
-        ssl:close(Sock)
-    catch
-        throw:Term -> Term;
-        exit:Reason -> {'EXIT', Reason};
-        error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-    end;
-do_close(#state{socket = Sock, is_ssl = false}) ->
-    try
-        gen_tcp:close(Sock)
-    catch
-        throw:Term -> Term;
-        exit:Reason -> {'EXIT', Reason};
-        error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-    end.
+               }) when Pts /= done -> ?TRY_CATCH(fun gen_tcp:close/1, [Sock]);
+do_close(#state{socket = Sock, is_ssl = true})  -> ?TRY_CATCH(fun ssl:close/1, [Sock]);
+do_close(#state{socket = Sock, is_ssl = false}) -> ?TRY_CATCH(fun gen_tcp:close/1, [Sock]).
 
 active_once(#state{cur_req = #request{caller_controls_socket = true}}) ->
     ok;
@@ -1084,13 +1045,7 @@ send_req_1(From,
                                 false ->
                                     ok;
                                 true ->
-                                    try
-                                        StreamTo ! {ibrowse_async_raw_req, Raw_req}
-                                    catch
-                                        throw:Term -> Term;
-                                        exit:Reason -> {'EXIT', Reason};
-                                        error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-                                    end
+                                    ?TRY_CATCH(fun erlang:send/2, [StreamTo, {ibrowse_async_raw_req, Raw_req}])
                             end
                     end,
                     State_4 = set_inac_timer(State_3),
@@ -1456,33 +1411,28 @@ parse_response(Data, #state{reply_buffer = Acc, reqs = Reqs,
                         V_1 when is_integer(V_1), V_1 >= 0 ->
                             send_async_headers(ReqId, StreamTo, Give_raw_headers, State_1),
                             do_trace("Recvd Content-Length of ~p~n", [V_1]),
-                            State_2 = State_1#state{
-                                rep_buf_size = 0,
-                                reply_buffer = <<>>,
-                                content_length = V_1
-                            },
+                            State_2 = State_1#state{rep_buf_size=0,
+                                                    reply_buffer = <<>>,
+                                                    content_length=V_1},
                             case parse_11_response(Data_1, State_2) of
                                 {error, Reason} ->
-                                    fail_pipelined_requests(
-                                        State_1,
-                                        {error, {Reason, {stat_code, StatCode}, Headers_1}}
-                                    ),
+                                    fail_pipelined_requests(State_1,
+                                                            {error, {Reason,
+                                                                     {stat_code, StatCode}, Headers_1}}),
                                     {error, Reason};
                                 State_3 ->
                                     State_3
                             end;
                         _ ->
-                            fail_pipelined_requests(
-                                State_1,
-                                {error, {content_length_undefined, {stat_code, StatCode}, Headers}}
-                            ),
+                            fail_pipelined_requests(State_1,
+                                                    {error, {content_length_undefined,
+                                                             {stat_code, StatCode}, Headers}}),
                             {error, content_length_undefined}
                     catch
                         _:_ ->
-                            fail_pipelined_requests(
-                                State_1,
-                                {error, {content_length_undefined, {stat_code, StatCode}, Headers}}
-                            ),
+                            fail_pipelined_requests(State_1,
+                                                    {error, {content_length_undefined,
+                                                             {stat_code, StatCode}, Headers}}),
                             {error, content_length_undefined}
                     end
             end;
@@ -2037,21 +1987,9 @@ send_async_headers(ReqId, StreamTo, Give_raw_headers,
     {Headers_1, Raw_headers_1} = maybe_add_custom_headers(Status_line, Headers, Raw_headers, Opts),
     case Give_raw_headers of
         false ->
-            try
-                StreamTo ! {ibrowse_async_headers, ReqId, StatCode, Headers_1}
-            catch
-                throw:Term -> Term;
-                exit:Reason -> {'EXIT', Reason};
-                error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-            end;
+            ?TRY_CATCH(fun erlang:send/2, [StreamTo, {ibrowse_async_headers, ReqId, StatCode, Headers_1}]);
         true ->
-            try
-                StreamTo ! {ibrowse_async_headers, ReqId, Status_line, Raw_headers_1}
-            catch
-                throw:Term -> Term;
-                exit:Reason -> {'EXIT', Reason};
-                error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-            end
+            ?TRY_CATCH(fun erlang:send/2, [StreamTo, {ibrowse_async_headers, ReqId, Status_line, Raw_headers_1}])
     end.
 
 maybe_add_custom_headers(Status_line, Headers, Raw_headers, Opts) ->
@@ -2105,13 +2043,7 @@ do_reply(#state{prev_req_id = Prev_req_id} = State,
             ok;
         _ ->
             Body_1 = format_response_data(Resp_format, Body),
-            try
-                StreamTo ! {ibrowse_async_response, ReqId, Body_1}
-            catch
-                throw:Term -> Term;
-                exit:Reason -> {'EXIT', Reason};
-                error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-            end
+            ?TRY_CATCH(fun erlang:send/2, [StreamTo, {ibrowse_async_response, ReqId, Body_1}])
     end,
     try
         StreamTo ! {ibrowse_async_response_end, ReqId}
@@ -2135,26 +2067,14 @@ do_reply(#state{prev_req_id = Prev_req_id} = State,
 do_reply(State, _From, StreamTo, ReqId, Resp_format, Msg) ->
     State_1 = dec_pipeline_counter(State),
     Msg_1 = format_response_data(Resp_format, Msg),
-    try
-        StreamTo ! {ibrowse_async_response, ReqId, Msg_1}
-    catch
-        throw:Term -> Term;
-        exit:Reason -> {'EXIT', Reason};
-        error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-    end,
+    ?TRY_CATCH(fun erlang:send/2, [StreamTo, {ibrowse_async_response, ReqId, Msg_1}]),
     State_1.
 
 do_interim_reply(undefined, _, _ReqId, _Msg) ->
     ok;
 do_interim_reply(StreamTo, Response_format, ReqId, Msg) ->
     Msg_1 = format_response_data(Response_format, Msg),
-    try
-        StreamTo ! {ibrowse_async_response, ReqId, Msg_1}
-    catch
-        throw:Term -> Term;
-        exit:Reason -> {'EXIT', Reason};
-        error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-    end.
+    ?TRY_CATCH(fun erlang:send/2, [StreamTo, {ibrowse_async_response, ReqId, Msg_1}]).
 
 do_error_reply(#state{reqs = Reqs, tunnel_setup_queue = Tun_q} = State, Err) ->
     ReqList = queue:to_list(Reqs),
@@ -2247,13 +2167,7 @@ shutting_down(#state{lb_ets_tid = undefined}) ->
     ok;
 shutting_down(#state{lb_ets_tid = Tid,
                      cur_pipeline_size = _Sz}) ->
-    try
-        ets:select_delete(Tid, [{{{'_', '_', '$1'},'_'},[{'==','$1',{const,self()}}],[true]}])
-    catch
-        throw:Term -> Term;
-        exit:Reason -> {'EXIT', Reason};
-        error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-    end.
+    ?TRY_CATCH(fun ets:select_delete/2, [Tid, [{{{'_', '_', '$1'},'_'},[{'==','$1',{const,self()}}],[true]}]]).
 
 inc_pipeline_counter(#state{is_closing = true} = State) ->
     State;
@@ -2267,13 +2181,7 @@ dec_pipeline_counter(#state{cur_pipeline_size = Pipe_sz,
                             proc_state        = Proc_state} = State) when Tid /= undefined,
                                                                           Proc_state /= ?dead_proc_walking ->
     Ts = os:timestamp(),
-    try
-        ets:insert(Tid, {{Pipe_sz - 1, os:timestamp(), self()}, []})
-    catch
-        throw:Term -> Term;
-        exit:Reason -> {'EXIT', Reason};
-        error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-    end,
+    ?TRY_CATCH(fun ets:insert/2, [Tid, {{Pipe_sz - 1, os:timestamp(), self()}, []}]),
     try
         ets:select_delete(Tid, [{{{'_', '$2', '$1'},'_'},
                                  [{'==', '$1', {const,self()}},

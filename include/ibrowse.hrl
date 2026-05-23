@@ -23,4 +23,15 @@
 -define(CONF_TABLE, ibrowse_conf).
 -define(STREAM_TABLE, ibrowse_stream).
 
+-define(TRY_CATCH(F, A), ?TRY_CATCH(erlang, apply, [F, A])).
+-define(TRY_CATCH(M, F, A),
+    try
+        apply(M, F, A)
+    catch
+        throw:Term -> Term;
+        exit:Reason -> {'EXIT', Reason};
+        error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
+    end
+).
+
 -endif.

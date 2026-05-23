@@ -165,13 +165,7 @@ handle_info({trace, Bool}, #state{ets_tid = undefined} = State) ->
 
 handle_info({trace, Bool}, #state{ets_tid = Tid} = State) ->
     ets:foldl(fun({{_, Pid}, _}, Acc) when is_pid(Pid) ->
-              try
-                  Pid ! {trace, Bool}
-              catch
-                  throw:Term -> Term;
-                  exit:Reason -> {'EXIT', Reason};
-                  error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-              end,
+              ?TRY_CATCH(fun erlang:send/2, [Pid, {trace, Bool}]),
 		      Acc;
 		 (_, Acc) ->
 		      Acc
@@ -200,13 +194,7 @@ handle_info(_Info, State) ->
 %% Returns: any (ignored by gen_server)
 %%--------------------------------------------------------------------
 terminate(_Reason, #state{host = Host, port = Port, ets_tid = Tid} = _State) ->
-    try
-        ets:delete(ibrowse_lb, {Host, Port})
-    catch
-        throw:Term -> Term;
-        exit:Reason -> {'EXIT', Reason};
-        error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-    end,
+    ?TRY_CATCH(fun ets:delete/2, [ibrowse_lb, {Host, Port}]),
     stop_all_conn_procs(Tid),
     ok.
 
