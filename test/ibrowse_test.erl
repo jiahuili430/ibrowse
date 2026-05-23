@@ -232,13 +232,7 @@ spawn_workers(Url, NumWorkers, NumReqsPerWorker) ->
 do_wait(Url) ->
     receive
 	{'EXIT', _, normal} ->
-            try
-                ibrowse:show_dest_status(Url)
-            catch
-                throw:Term -> Term;
-                exit:Reason -> {'EXIT', Reason};
-                error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-            end,
+            ?TRY_CATCH(fun ibrowse:show_dest_status/1, [Url]),
             try
                 ibrowse:show_dest_status()
             catch
@@ -260,13 +254,7 @@ do_wait(Url) ->
 		0 ->
 		    done;
 		_ ->
-                    try
-                        ibrowse:show_dest_status(Url)
-                    catch
-                        throw:Term -> Term;
-                        exit:Reason -> {'EXIT', Reason};
-                        error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-                    end,
+                    ?TRY_CATCH(fun ibrowse:show_dest_status/1, [Url]),
                     try
                         ibrowse:show_dest_status()
                     catch
@@ -344,13 +332,7 @@ unit_tests(Options, Test_list) ->
     application:start(asn1),
     application:start(public_key),
     application:start(ssl),
-    try
-        ibrowse_test_server:start_server(8181, tcp)
-    catch
-        throw:Term -> Term;
-        exit:Reason -> {'EXIT', Reason};
-        error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-    end,
+    ?TRY_CATCH(fun ibrowse_test_server:start_server/2, [8181, tcp]),
     application:start(ibrowse),
     Options_1 = Options ++ [{connect_timeout, 5000}],
     Test_timeout = proplists:get_value(test_timeout, Options, 60000),
@@ -537,14 +519,7 @@ maybe_stream_next(Req_id, Options) ->
 
 execute_req(local_test_fun, Method, Args) ->
     reset_ibrowse(),
-    Result =
-        try
-            apply(?MODULE, Method, Args)
-        catch
-            throw:Term -> Term;
-            exit:Reason -> {'EXIT', Reason};
-            error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-        end,
+    Result = ?TRY_CATCH(?MODULE, Method, Args),
     io:format("     ~-54.54w: ", [Method]),
     io:format("~p~n", [Result]),
     case Result of
@@ -553,14 +528,7 @@ execute_req(local_test_fun, Method, Args) ->
     end;
 execute_req(Url, Method, Options) ->
     io:format("~7.7w, ~50.50s: ", [Method, Url]),
-    Result =
-        try
-            ibrowse:send_req(Url, [], Method, [], Options)
-        catch
-            throw:Term -> Term;
-            exit:Reason -> {'EXIT', Reason};
-            error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-        end,
+    Result = ?TRY_CATCH(fun ibrowse:send_req/5, [Url, [], Method, [], Options]),
     case Result of
 	{ok, SCode, _H, _B} ->
 	    io:format("Status code: ~p~n", [SCode]),
@@ -806,14 +774,7 @@ test_retry_of_requests(Url, Timeout) ->
     Parent = self(),
     Pids = lists:map(fun(_) ->
                         spawn(fun() ->
-                                 Res =
-                                     try
-                                         ibrowse:send_req(Url, [], get, [], [], Timeout)
-                                     catch
-                                         throw:Term -> Term;
-                                         exit:Reason -> {'EXIT', Reason};
-                                         error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
-                                     end,
+                                 Res = ?TRY_CATCH(fun ibrowse:send_req/6, [Url, [], get, [], [], Timeout]),
                                  Parent ! {self(), Res}
                               end)
                      end, lists:seq(1,10)),

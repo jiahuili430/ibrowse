@@ -2,14 +2,15 @@
 -define(IBROWSE_HRL, "ibrowse.hrl").
 
 -record(url, {
-          abspath,
-          host,
-          port,
-          username,
-          password,
-          path,
-          protocol,
-          host_type  % 'hostname', 'ipv4_address' or 'ipv6_address'
+    abspath,
+    host,
+    port,
+    username,
+    password,
+    path,
+    protocol,
+    % 'hostname', 'ipv4_address' or 'ipv6_address'
+    host_type
 }).
 
 -record(lb_pid, {host_port, pid, ets_tid}).
@@ -22,5 +23,17 @@
 -define(LOAD_BALANCER_NAMED_TABLE, ibrowse_lb).
 -define(CONF_TABLE, ibrowse_conf).
 -define(STREAM_TABLE, ibrowse_stream).
+
+-define(TRY_CATCH(F, A), ?TRY_CATCH(erlang, apply, [F, A])).
+
+-define(TRY_CATCH(M, F, A),
+    try
+        apply(M, F, A)
+    catch
+        throw:Term -> Term;
+        exit:Reason -> {'EXIT', Reason};
+        error:Reason:Stacktrace -> {'EXIT', {Reason, Stacktrace}}
+    end
+).
 
 -endif.
